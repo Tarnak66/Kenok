@@ -5,7 +5,8 @@ import requests
 from bs4 import BeautifulSoup
 
 # --- 1. НАСТРОЙКИ ---
-client = Groq(api_key="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")
+api_key = st.secrets["GROQ_KEY"]
+client = Groq(api_key=api_key)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -44,11 +45,11 @@ with col2:
 
 st.write("---")
 
-# --- 3. КОНТЕЙНЕР ЗА ЧАТА (Важно: Поставяме го тук!) ---
+# --- 3. КОНТЕЙНЕР ЗА ЧАТА (За да се пълни нагоре) ---
 chat_placeholder = st.container()
 
 # --- 4. ПОЛЕ ЗА ПИСАНЕ (Най-отдолу) ---
-st.text_input("Питай ме нещо:", key="widget", on_change=clear_text)
+st.text_input("Питай me нещо:", key="widget", on_change=clear_text)
 
 # --- 5. ЛОГИКА ЗА ОБРАБОТКА ---
 if "user_input" in st.session_state and st.session_state.user_input:
@@ -58,7 +59,7 @@ if "user_input" in st.session_state and st.session_state.user_input:
     st.session_state.messages.append({"role": "user", "content": user_query})
     
     with st.spinner('Kenok мисли...'):
-        chat_keywords = ["здравей", "как си", "кой си", "защо", "какво мислиш"]
+        chat_keywords = ["здравей", "как си", "кой си", "защо", "какво мислиш", "здрасти"]
         needs_search = not any(w in user_query.lower() for w in chat_keywords)
         
         info = ""
@@ -66,19 +67,24 @@ if "user_input" in st.session_state and st.session_state.user_input:
         if needs_search:
             info, source = scrape_google(user_query)
 
+        # СТРИКТНИ ИНСТРУКЦИИ ЗА ЕЗИКА
         messages_for_ai = [
-            {"role": "system", "content": "Ти си Kenok, полезен ИИ асистент. Винаги отговаряй на български език ясно и точно. Помни контекста на разговора."}
+            {
+                "role": "system", 
+                "content": "Ти си Kenok, полезен ИИ асистент. ПИШИ САМО НА БЪЛГАРСКИ ЕЗИК. Не използвай китайски, английски или други чужди знаци в думите. Отговаряй ясно, точно и граматически правилно."
+            }
         ]
         
         for m in st.session_state.messages:
             messages_for_ai.append({"role": m["role"], "content": m["content"]})
             
         if info:
-            messages_for_ai[-1]["content"] += f"\n\nКонтекст от интернет: {info}"
+            messages_for_ai[-1]["content"] += f"\n\nКонтекст от интернет (използвай го за отговора): {info}"
 
         chat_completion = client.chat.completions.create(
             messages=messages_for_ai,
             model="llama-3.3-70b-versatile",
+            temperature=0.5, # По-нисък за повече стабилност на езика
         )
         
         response = chat_completion.choices[0].message.content
@@ -88,7 +94,7 @@ if "user_input" in st.session_state and st.session_state.user_input:
         st.session_state.messages.append({"role": "assistant", "content": response})
         st.rerun()
 
-# --- 6. ПЪЛНЕНЕ НА КОНТЕЙНЕРА СЪС СЪОБЩЕНИЯ ---
+# --- 6. ПЪЛНЕНЕ НА КОНТЕЙНЕРА ---
 with chat_placeholder:
     for msg in st.session_state.messages:
         if msg["role"] == "user":
