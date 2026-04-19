@@ -13,9 +13,7 @@ SYSTEM_INSTRUCTIONS = """
 """
 
 # Инициализация на мениджъра на бисквитки
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
+cookie_manager = stx.CookieManager()
 
 cookie_manager = get_cookie_manager()
 
