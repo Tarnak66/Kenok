@@ -1,20 +1,36 @@
 import streamlit as st
 from groq import Groq
 import uuid
+import json
+import os
 
 # --- 1. КОНФИГУРАЦИЯ ---
 api_key = st.secrets.get("GROQ_KEY", "missing_key")
 client = Groq(api_key=api_key)
+
+DB_FILE = "users_data.json"
 
 SYSTEM_INSTRUCTIONS = """
 Ти си Kenok - полезен ИИ асистент. Твоят създател е Tarnak66. 
 Не споменавай други компании. Отговаряй винаги на български.
 """
 
-# --- 2. ИНИЦИАЛИЗАЦИЯ НА ГЛОБАЛНАТА БАЗА ---
-if "global_db" not in st.session_state:
-    st.session_state.global_db = {}
+# --- ФУНКЦИИ ЗА БАЗАТА ДАННИ (ЗАПИС ВЪВ ФАЙЛ) ---
+def load_data():
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
+def save_data(data):
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+# Инициализираме базата от файла
+if "global_db" not in st.session_state:
+    st.session_state.global_db = load_data()
+
+# --- 2. ИНИЦИАЛИЗАЦИЯ НА СЕСИЯТА ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "username" not in st.session_state:
@@ -24,11 +40,8 @@ if "current_chat_id" not in st.session_state:
 if "editing_chat_id" not in st.session_state:
     st.session_state.editing_chat_id = None
 
-# ФУНКЦИЯ ЗА НОВ ЧАТ
 def create_new_chat():
     user = st.session_state.username
-    if user not in st.session_state.global_db:
-        st.session_state.global_db[user] = {"password": "", "chats": {}}
     user_chats = st.session_state.global_db[user]["chats"]
     existing_numbers = [int(chat["name"].split(" ")[1]) for chat in user_chats.values() if chat["name"].startswith("Чат ") and chat["name"].split(" ")[1].isdigit()]
     next_num = 1
@@ -37,8 +50,9 @@ def create_new_chat():
     new_id = str(uuid.uuid4())
     user_chats[new_id] = {"name": f"Чат {next_num}", "messages": []}
     st.session_state.current_chat_id = new_id
+    save_data(st.session_state.global_db) # ЗАПАЗВАМЕ ВЕДНАГА
 
-# СТИЛИЗИРАНЕ
+# --- 3. СТИЛИЗИРАНЕ ---
 st.markdown("""
     <style>
     div[data-testid="InputInstructions"] { display: none; }
@@ -47,7 +61,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. ЕКРАН ЗА ВХОД ---
+# --- 4. ЕКРАН ЗА ВХОД ---
 if not st.session_state.logged_in:
     st.markdown("<h1 style='text-align: center;'>🤖 Kenok</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -59,6 +73,7 @@ if not st.session_state.logged_in:
             if user and password:
                 if user not in st.session_state.global_db:
                     st.session_state.global_db[user] = {"password": password, "chats": {}}
+                    save_data(st.session_state.global_db)
                 
                 if st.session_state.global_db[user]["password"] == password:
                     st.session_state.logged_in = True
@@ -70,11 +85,10 @@ if not st.session_state.logged_in:
                     st.error("Грешна парола!")
             else:
                 st.error("Попълни полетата!")
-        
         st.write("---")
-        st.info("За да използвате Kenok, първо трябва да си направите профил. Измислете име и парола. За да влезете отново, напишете същите данни.")
+        st.info("За да използвате Kenok, направете си профил. Данните се пазят автоматично.")
 
-# --- 4. ГЛАВЕН ИНТЕРФЕЙС ---
+# --- 5. ГЛАВЕН ИНТЕРФЕЙС ---
 else:
     user_chats = st.session_state.global_db[st.session_state.username]["chats"]
     with st.sidebar:
@@ -94,6 +108,7 @@ else:
                     if st.button("💾", key=f"sv_{chat_id}"):
                         user_chats[chat_id]["name"] = new_name
                         st.session_state.editing_chat_id = None
+                        save_data(st.session_state.global_db) # ЗАПАЗВАМЕ
                         st.rerun()
                 else:
                     if st.button(chat_data["name"], key=f"s_{chat_id}", use_container_width=True):
@@ -108,6 +123,7 @@ else:
                     del user_chats[chat_id]
                     if st.session_state.current_chat_id == chat_id:
                         st.session_state.current_chat_id = None
+                    save_data(st.session_state.global_db) # ЗАПАЗВАМЕ
                     st.rerun()
 
         st.write("---")
@@ -125,8 +141,10 @@ else:
 
         if prompt := st.chat_input("Питай ме нещо..."):
             curr["messages"].append({"role": "user", "content": prompt})
+            save_data(st.session_state.global_db) # ЗАПАЗВАМЕ СЪОБЩЕНИЕТО
             with st.chat_message("user"):
                 st.write(prompt)
+            
             ai_messages = [{"role": "system", "content": SYSTEM_INSTRUCTIONS}] + curr["messages"][-10:]
             with st.chat_message("assistant"):
                 with st.spinner("Kenok мисли..."):
@@ -137,3 +155,4 @@ else:
                     ).choices[0].message.content
                     st.write(response)
                 curr["messages"].append({"role": "assistant", "content": response})
+                save_data(st.session_state.global_db) # ЗАПАЗВАМЕ ОТГОВОРА
