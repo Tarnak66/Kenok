@@ -3,10 +3,11 @@ from groq import Groq
 import uuid
 
 # --- 1. КОНФИГУРАЦИЯ ---
-client = Groq(api_key=st.secrets.get["GROQ_KEY"])
+# Първо създаваме променливата api_key по сигурния начин
+api_key = st.secrets.get("GROQ_KEY", "missing_key")
 
+# Чак след това създаваме client, като използваме вече създадената променлива
 client = Groq(api_key=api_key)
-
 SYSTEM_INSTRUCTIONS = """
 Ти си Kenok - полезен ИИ асистент. Твоят създател е Tarnak66. 
 Не споменавай други компании. Отговаряй винаги на български.
