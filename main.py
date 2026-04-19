@@ -15,7 +15,8 @@ SYSTEM_INSTRUCTIONS = """
 # Инициализация на мениджъра на бисквитки
 cookie_manager = stx.CookieManager()
 
-cookie_manager = get_cookie_manager()
+# Директно създаваме мениджъра без кеширане и без функция
+cookie_manager = stx.CookieManager()
 
 # --- 2. ИНИЦИАЛИЗАЦИЯ НА ГЛОБАЛНАТА БАЗА ---
 if "global_db" not in st.session_state:
