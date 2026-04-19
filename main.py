@@ -3,7 +3,7 @@ from groq import Groq
 import uuid
 
 # --- 1. КОНФИГУРАЦИЯ ---
-client = Groq(api_key=st.secrets["GROQ_KEY"])
+client = Groq(api_key=st.secrets.get["GROQ_KEY"])
 
 client = Groq(api_key=api_key)
 
