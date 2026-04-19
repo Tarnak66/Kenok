@@ -3,11 +3,10 @@ from groq import Groq
 import uuid
 
 # --- 1. КОНФИГУРАЦИЯ ---
-# Първо създаваме променливата api_key по сигурния начин
+# Вземаме ключа сигурно. Ако го няма, използваме маркер за грешка.
 api_key = st.secrets.get("GROQ_KEY", "missing_key")
-
-# Чак след това създаваме client, като използваме вече създадената променлива
 client = Groq(api_key=api_key)
+
 SYSTEM_INSTRUCTIONS = """
 Ти си Kenok - полезен ИИ асистент. Твоят създател е Tarnak66. 
 Не споменавай други компании. Отговаряй винаги на български.
@@ -67,6 +66,10 @@ if not st.session_state.logged_in:
     with col2:
         user = st.text_input("Потребител", placeholder="Потребител", label_visibility="collapsed")
         password = st.text_input("Парола", type="password", placeholder="Парола", label_visibility="collapsed")
+        
+        # ВРЪЩАМ ОТМЕТКАТА
+        st.checkbox("Запомни ме")
+        
         if st.button("Влез / Регистрация", use_container_width=True):
             if user and password:
                 if user not in st.session_state.global_db:
@@ -81,8 +84,10 @@ if not st.session_state.logged_in:
                     st.error("Грешна парола!")
             else:
                 st.error("Попълни полетата!")
+        
         st.write("---")
-        st.info("За да използвате Kenok, направете си профил: име и парола.")
+        # ВРЪЩАМ ПЪЛНОТО ПОЯСНЕНИЕ
+        st.info("За да използвате Kenok, първо трябва да си направите профил. Измислете име и парола. За да влезете отново, напишете същите данни.")
 
 # --- 4. ГЛАВЕН ИНТЕРФЕЙС ---
 else:
@@ -97,11 +102,8 @@ else:
             st.rerun()
         st.write("---")
         
-        # Списък с чатове
         for chat_id, chat_data in list(user_chats.items()):
-            # Правим 3 много тесни колони за бутоните
             c1, c2, c3 = st.columns([0.7, 0.15, 0.15])
-            
             with c1:
                 if st.session_state.editing_chat_id == chat_id:
                     new_name = st.text_input("Edit", value=chat_data["name"], key=f"in_{chat_id}", label_visibility="collapsed")
