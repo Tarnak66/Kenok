@@ -1,9 +1,9 @@
 import streamlit as st
 from groq import Groq
 import uuid
+import extra_streamlit_components as stx  # Новата библиотека за бисквитки
 
 # --- 1. КОНФИГУРАЦИЯ ---
-# Вземаме ключа сигурно. Ако го няма, използваме маркер за грешка.
 api_key = st.secrets.get("GROQ_KEY", "missing_key")
 client = Groq(api_key=api_key)
 
@@ -11,6 +11,13 @@ SYSTEM_INSTRUCTIONS = """
 Ти си Kenok - полезен ИИ асистент. Твоят създател е Tarnak66. 
 Не споменавай други компании. Отговаряй винаги на български.
 """
+
+# Инициализация на мениджъра на бисквитки
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
 
 # --- 2. ИНИЦИАЛИЗАЦИЯ НА ГЛОБАЛНАТА БАЗА ---
 if "global_db" not in st.session_state:
@@ -25,9 +32,11 @@ if "current_chat_id" not in st.session_state:
 if "editing_chat_id" not in st.session_state:
     st.session_state.editing_chat_id = None
 
-# --- ФУНКЦИИ ---
+# ФУНКЦИЯ ЗА НОВ ЧАТ
 def create_new_chat():
     user = st.session_state.username
+    if user not in st.session_state.global_db:
+        st.session_state.global_db[user] = {"password": "", "chats": {}}
     user_chats = st.session_state.global_db[user]["chats"]
     existing_numbers = [int(chat["name"].split(" ")[1]) for chat in user_chats.values() if chat["name"].startswith("Чат ") and chat["name"].split(" ")[1].isdigit()]
     next_num = 1
@@ -37,27 +46,28 @@ def create_new_chat():
     user_chats[new_id] = {"name": f"Чат {next_num}", "messages": []}
     st.session_state.current_chat_id = new_id
 
-# --- СТИЛИЗИРАНЕ (ФИКС ЗА ПОДРЕДБА И НАДПИСИ) ---
+# СТИЛИЗИРАНЕ
 st.markdown("""
     <style>
-    /* Премахва "Press Enter to apply" */
-    div[data-testid="InputInstructions"] {
-        display: none;
-    }
-    /* Форсира колоните в Sidebar да стоят на един ред */
-    [data-testid="column"] {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: flex-start;
-        min-width: 0px !important;
-    }
-    /* Малко разстояние между иконките */
-    .stButton button {
-        padding: 2px 5px !important;
-    }
+    div[data-testid="InputInstructions"] { display: none; }
+    [data-testid="column"] { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; min-width: 0px !important; }
+    .stButton button { padding: 2px 5px !important; }
     </style>
 """, unsafe_allow_html=True)
+
+# --- ЛОГИКА ЗА АВТОМАТИЧЕН ВХОД (COOKIES) ---
+saved_user = cookie_manager.get(cookie="kenok_user")
+saved_pass = cookie_manager.get(cookie="kenok_pass")
+
+if saved_user and saved_pass and not st.session_state.logged_in:
+    # Автоматично създаваме потребителя в базата, ако го няма след рестарт
+    if saved_user not in st.session_state.global_db:
+        st.session_state.global_db[saved_user] = {"password": saved_pass, "chats": {}}
+    
+    st.session_state.logged_in = True
+    st.session_state.username = saved_user
+    if not st.session_state.global_db[saved_user]["chats"]:
+        create_new_chat()
 
 # --- 3. ЕКРАН ЗА ВХОД ---
 if not st.session_state.logged_in:
@@ -66,17 +76,22 @@ if not st.session_state.logged_in:
     with col2:
         user = st.text_input("Потребител", placeholder="Потребител", label_visibility="collapsed")
         password = st.text_input("Парола", type="password", placeholder="Парола", label_visibility="collapsed")
-        
-        # ВРЪЩАМ ОТМЕТКАТА
-        st.checkbox("Запомни ме")
+        remember = st.checkbox("Запомни ме")
         
         if st.button("Влез / Регистрация", use_container_width=True):
             if user and password:
                 if user not in st.session_state.global_db:
                     st.session_state.global_db[user] = {"password": password, "chats": {}}
+                
                 if st.session_state.global_db[user]["password"] == password:
                     st.session_state.logged_in = True
                     st.session_state.username = user
+                    
+                    # ЗАПИСВАМЕ БИСКВИТКИТЕ, АКО Е ОТМЕТНАТО
+                    if remember:
+                        cookie_manager.set("kenok_user", user, key="set_user")
+                        cookie_manager.set("kenok_pass", password, key="set_pass")
+                    
                     if not st.session_state.global_db[user]["chats"]:
                         create_new_chat()
                     st.rerun()
@@ -86,15 +101,13 @@ if not st.session_state.logged_in:
                 st.error("Попълни полетата!")
         
         st.write("---")
-        # ВРЪЩАМ ПЪЛНОТО ПОЯСНЕНИЕ
         st.info("За да използвате Kenok, първо трябва да си направите профил. Измислете име и парола. За да влезете отново, напишете същите данни.")
 
 # --- 4. ГЛАВЕН ИНТЕРФЕЙС ---
 else:
     user_chats = st.session_state.global_db[st.session_state.username]["chats"]
     with st.sidebar:
-        try:
-            st.image("kk.jpg", width=80)
+        try: st.image("kk.jpg", width=80)
         except: pass
         st.markdown(f"### **{st.session_state.username}**")
         if st.button("+ Нов чат", use_container_width=True):
@@ -128,6 +141,9 @@ else:
 
         st.write("---")
         if st.button("🚪 Изход", use_container_width=True):
+            # ТРИЕМ БИСКВИТКИТЕ ПРИ ИЗХОД
+            cookie_manager.delete("kenok_user")
+            cookie_manager.delete("kenok_pass")
             st.session_state.logged_in = False
             st.rerun()
 
