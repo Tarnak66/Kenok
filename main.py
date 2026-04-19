@@ -15,8 +15,8 @@ SYSTEM_INSTRUCTIONS = """
 # Инициализация на мениджъра на бисквитки
 cookie_manager = stx.CookieManager()
 
-# Директно създаваме мениджъра без кеширане и без функция
-cookie_manager = stx.CookieManager()
+# Добавяме уникален ключ 'kenok_cookies', за да не се дублира при презареждане
+cookie_manager = stx.CookieManager(key="kenok_cookies")
 
 # --- 2. ИНИЦИАЛИЗАЦИЯ НА ГЛОБАЛНАТА БАЗА ---
 if "global_db" not in st.session_state:
