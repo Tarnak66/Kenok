@@ -1,7 +1,6 @@
 import streamlit as st
 from groq import Groq
 import uuid
-import extra_streamlit_components as stx  # Новата библиотека за бисквитки
 
 # --- 1. КОНФИГУРАЦИЯ ---
 api_key = st.secrets.get("GROQ_KEY", "missing_key")
@@ -11,12 +10,6 @@ SYSTEM_INSTRUCTIONS = """
 Ти си Kenok - полезен ИИ асистент. Твоят създател е Tarnak66. 
 Не споменавай други компании. Отговаряй винаги на български.
 """
-
-# Инициализация на мениджъра на бисквитки
-cookie_manager = stx.CookieManager()
-
-# Добавяме уникален ключ 'kenok_cookies', за да не се дублира при презареждане
-cookie_manager = stx.CookieManager(key="kenok_cookies")
 
 # --- 2. ИНИЦИАЛИЗАЦИЯ НА ГЛОБАЛНАТА БАЗА ---
 if "global_db" not in st.session_state:
@@ -54,20 +47,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- ЛОГИКА ЗА АВТОМАТИЧЕН ВХОД (COOKIES) ---
-saved_user = cookie_manager.get(cookie="kenok_user")
-saved_pass = cookie_manager.get(cookie="kenok_pass")
-
-if saved_user and saved_pass and not st.session_state.logged_in:
-    # Автоматично създаваме потребителя в базата, ако го няма след рестарт
-    if saved_user not in st.session_state.global_db:
-        st.session_state.global_db[saved_user] = {"password": saved_pass, "chats": {}}
-    
-    st.session_state.logged_in = True
-    st.session_state.username = saved_user
-    if not st.session_state.global_db[saved_user]["chats"]:
-        create_new_chat()
-
 # --- 3. ЕКРАН ЗА ВХОД ---
 if not st.session_state.logged_in:
     st.markdown("<h1 style='text-align: center;'>🤖 Kenok</h1>", unsafe_allow_html=True)
@@ -75,7 +54,6 @@ if not st.session_state.logged_in:
     with col2:
         user = st.text_input("Потребител", placeholder="Потребител", label_visibility="collapsed")
         password = st.text_input("Парола", type="password", placeholder="Парола", label_visibility="collapsed")
-        remember = st.checkbox("Запомни ме")
         
         if st.button("Влез / Регистрация", use_container_width=True):
             if user and password:
@@ -85,12 +63,6 @@ if not st.session_state.logged_in:
                 if st.session_state.global_db[user]["password"] == password:
                     st.session_state.logged_in = True
                     st.session_state.username = user
-                    
-                    # ЗАПИСВАМЕ БИСКВИТКИТЕ, АКО Е ОТМЕТНАТО
-                    if remember:
-                        cookie_manager.set("kenok_user", user, key="set_user")
-                        cookie_manager.set("kenok_pass", password, key="set_pass")
-                    
                     if not st.session_state.global_db[user]["chats"]:
                         create_new_chat()
                     st.rerun()
@@ -140,9 +112,6 @@ else:
 
         st.write("---")
         if st.button("🚪 Изход", use_container_width=True):
-            # ТРИЕМ БИСКВИТКИТЕ ПРИ ИЗХОД
-            cookie_manager.delete("kenok_user")
-            cookie_manager.delete("kenok_pass")
             st.session_state.logged_in = False
             st.rerun()
 
