@@ -35,36 +35,37 @@ def cleanup_old_accounts(data):
 if "global_db" not in st.session_state:
     st.session_state.global_db = cleanup_old_accounts(load_data())
 
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
 # --- 2. СТИЛИЗИРАНЕ ---
 st.markdown("""
     <style>
     div[data-testid="InputInstructions"] { display: none; }
-    /* Червен бутон за изтриване */
-    div.stButton > button { border-radius: 5px; }
-    button[key="delete_acc"] { color: #ff4b4b !important; border-color: #ff4b4b !important; }
+    /* Стил за червения бутон за триене */
+    button[key="delete_acc_btn"] {
+        color: #ff4b4b !important;
+        border-color: #ff4b4b !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. ЛОГИКА ЗА "ЗАПОМНИ МЕ" ЧРЕЗ LOCALSTORAGE ---
-# Използваме малко JavaScript, за да прочетем/запишем данните в браузъра
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
-# --- 4. ЕКРАН ЗА ВХОД ---
+# --- 3. ЕКРАН ЗА ВХОД ---
 if not st.session_state.logged_in:
     st.markdown("<h1 style='text-align: center;'>🤖 Kenok</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
-    
     with col2:
-        # Полетата са празни, но ако браузърът ги е запомнил чрез стандартния Auto-complete, ще се попълнят
         user = st.text_input("Потребител", placeholder="Потребител", label_visibility="collapsed")
         password = st.text_input("Парола", type="password", placeholder="Парола", label_visibility="collapsed")
-        remember = st.checkbox("Запомни ме", value=False)
         
         if st.button("Влез / Регистрация", use_container_width=True):
             if user and password:
                 if user not in st.session_state.global_db:
-                    st.session_state.global_db[user] = {"password": password, "chats": {}, "last_seen": datetime.now().isoformat()}
+                    st.session_state.global_db[user] = {
+                        "password": password, 
+                        "chats": {}, 
+                        "last_seen": datetime.now().isoformat()
+                    }
                 
                 if st.session_state.global_db[user]["password"] == password:
                     st.session_state.logged_in = True
@@ -80,7 +81,7 @@ if not st.session_state.logged_in:
         st.write("---")
         st.info("За да използвате Kenok, първо трябва да си направите профил. Измислете име и парола. За да влезете отново, напишете същите данни. Ако не влизате 30 дни, акаунтът ви се трие автоматично.")
 
-# --- 5. ГЛАВЕН ИНТЕРФЕЙС ---
+# --- 4. ГЛАВЕН ИНТЕРФЕЙС ---
 else:
     user_data = st.session_state.global_db[st.session_state.username]
     user_chats = user_data["chats"]
@@ -110,16 +111,20 @@ else:
             st.session_state.logged_in = False
             st.rerun()
         
-        # ЧЕРВЕН БУТОН ЗА ИЗТРИВАНЕ
-        if st.button("❗ Изтрий акаунт", key="delete_acc", use_container_width=True):
+        if st.button("❗ Изтрий акаунт", key="delete_acc_btn", use_container_width=True):
             st.session_state.confirm_delete = True
             
         if st.session_state.get("confirm_delete"):
-            st.error("Сигурен ли си?")
-            if st.button("ПОТВЪРЖДАВАМ", use_container_width=True):
+            st.error("Сигурен ли си? Всичко ще бъде изтрито!")
+            col_y, col_n = st.columns(2)
+            if col_y.button("ДА", use_container_width=True):
                 del st.session_state.global_db[st.session_state.username]
                 save_data(st.session_state.global_db)
                 st.session_state.logged_in = False
+                st.session_state.confirm_delete = False
+                st.rerun()
+            if col_n.button("НЕ", use_container_width=True):
+                st.session_state.confirm_delete = False
                 st.rerun()
 
     # --- ЧАТ ЗОНА ---
@@ -132,15 +137,7 @@ else:
                 st.write(msg["content"])
 
         if prompt := st.chat_input("Питай ме нещо..."):
+            st.session_state.global_db[st.session_state.username]["last_seen"] = datetime.now().isoformat()
             curr["messages"].append({"role": "user", "content": prompt})
-            with st.chat_message("user"): st.write(prompt)
-            
-            with st.chat_message("assistant"):
-                with st.spinner("Kenok мисли..."):
-                    res = client.chat.completions.create(
-                        model="llama-3.3-70b-versatile",
-                        messages=[{"role": "system", "content": SYSTEM_INSTRUCTIONS}] + curr["messages"][-10:]
-                    ).choices[0].message.content
-                    st.write(res)
-                    curr["messages"].append({"role": "assistant", "content": res})
-                    save_data(st.session_state.global_db)
+            save_data(st.session_state.global_db)
+            st.rerun()
