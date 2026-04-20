@@ -37,16 +37,16 @@ if "global_db" not in st.session_state:
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+if "editing_chat_id" not in st.session_state:
+    st.session_state.editing_chat_id = None
 
 # --- 2. СТИЛИЗИРАНЕ ---
 st.markdown("""
     <style>
     div[data-testid="InputInstructions"] { display: none; }
-    /* Стил за червения бутон за триене */
-    button[key="delete_acc_btn"] {
-        color: #ff4b4b !important;
-        border-color: #ff4b4b !important;
-    }
+    [data-testid="column"] { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; }
+    .stButton button { padding: 2px 5px !important; }
+    button[key="delete_acc_btn"] { color: #ff4b4b !important; border-color: #ff4b4b !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -61,11 +61,7 @@ if not st.session_state.logged_in:
         if st.button("Влез / Регистрация", use_container_width=True):
             if user and password:
                 if user not in st.session_state.global_db:
-                    st.session_state.global_db[user] = {
-                        "password": password, 
-                        "chats": {}, 
-                        "last_seen": datetime.now().isoformat()
-                    }
+                    st.session_state.global_db[user] = {"password": password, "chats": {}, "last_seen": datetime.now().isoformat()}
                 
                 if st.session_state.global_db[user]["password"] == password:
                     st.session_state.logged_in = True
@@ -73,18 +69,13 @@ if not st.session_state.logged_in:
                     st.session_state.global_db[user]["last_seen"] = datetime.now().isoformat()
                     save_data(st.session_state.global_db)
                     st.rerun()
-                else:
-                    st.error("Грешна парола!")
-            else:
-                st.error("Попълни полетата!")
-        
+                else: st.error("Грешна парола!")
         st.write("---")
-        st.info("За да използвате Kenok, първо трябва да си направите профил. Измислете име и парола. За да влезете отново, напишете същите данни. Ако не влизате 30 дни, акаунтът ви се трие автоматично.")
+        st.info("За да използвате Kenok, първо трябва да си направите профил. Измислете име и парола. Ако не влизате 30 дни, акаунтът ви се трие автоматично.")
 
 # --- 4. ГЛАВЕН ИНТЕРФЕЙС ---
 else:
-    user_data = st.session_state.global_db[st.session_state.username]
-    user_chats = user_data["chats"]
+    user_chats = st.session_state.global_db[st.session_state.username]["chats"]
     
     with st.sidebar:
         st.markdown(f"### **{st.session_state.username}**")
@@ -97,14 +88,28 @@ else:
         
         st.write("---")
         for chat_id, chat_data in list(user_chats.items()):
-            c1, c2 = st.columns([0.8, 0.2])
-            if c1.button(chat_data["name"], key=f"s_{chat_id}", use_container_width=True):
-                st.session_state.current_chat_id = chat_id
-                st.rerun()
-            if c2.button("🗑️", key=f"d_{chat_id}"):
-                del user_chats[chat_id]
-                save_data(st.session_state.global_db)
-                st.rerun()
+            c1, c2, c3 = st.columns([0.7, 0.15, 0.15])
+            with c1:
+                if st.session_state.editing_chat_id == chat_id:
+                    new_name = st.text_input("Edit", value=chat_data["name"], key=f"in_{chat_id}", label_visibility="collapsed")
+                    if st.button("💾", key=f"sv_{chat_id}"):
+                        user_chats[chat_id]["name"] = new_name
+                        st.session_state.editing_chat_id = None
+                        save_data(st.session_state.global_db)
+                        st.rerun()
+                else:
+                    if st.button(chat_data["name"], key=f"s_{chat_id}", use_container_width=True):
+                        st.session_state.current_chat_id = chat_id
+                        st.rerun()
+            with c2:
+                if st.button("✏️", key=f"e_{chat_id}"):
+                    st.session_state.editing_chat_id = chat_id
+                    st.rerun()
+            with c3:
+                if st.button("🗑️", key=f"d_{chat_id}"):
+                    del user_chats[chat_id]
+                    save_data(st.session_state.global_db)
+                    st.rerun()
 
         st.write("---")
         if st.button("🚪 Изход", use_container_width=True):
@@ -115,7 +120,7 @@ else:
             st.session_state.confirm_delete = True
             
         if st.session_state.get("confirm_delete"):
-            st.error("Сигурен ли си? Всичко ще бъде изтрито!")
+            st.error("Сигурен ли си?")
             col_y, col_n = st.columns(2)
             if col_y.button("ДА", use_container_width=True):
                 del st.session_state.global_db[st.session_state.username]
@@ -133,11 +138,20 @@ else:
         st.subheader(f"💬 {curr['name']}")
         
         for msg in curr["messages"]:
-            with st.chat_message(msg["role"]):
-                st.write(msg["content"])
+            with st.chat_message(msg["role"]): st.write(msg["content"])
 
         if prompt := st.chat_input("Питай ме нещо..."):
             st.session_state.global_db[st.session_state.username]["last_seen"] = datetime.now().isoformat()
             curr["messages"].append({"role": "user", "content": prompt})
             save_data(st.session_state.global_db)
-            st.rerun()
+            
+            with st.chat_message("user"): st.write(prompt)
+            with st.chat_message("assistant"):
+                with st.spinner("Kenok мисли..."):
+                    res = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "system", "content": SYSTEM_INSTRUCTIONS}] + curr["messages"][-10:]
+                    ).choices[0].message.content
+                    st.write(res)
+                    curr["messages"].append({"role": "assistant", "content": res})
+                    save_data(st.session_state.global_db)
