@@ -10,7 +10,7 @@ api_key = st.secrets.get("GROQ_KEY", "missing_key")
 client = Groq(api_key=api_key)
 DB_FILE = "users_data.json"
 
-SYSTEM_INSTRUCTIONS = "Ти си Kenok - полезен ИИ асистент. Твоят създател е Tarnak66. Отговаряй на български."
+SYSTEM_INSTRUCTIONS = "Ти си Kenok - полезен ИИ асистент. Твоят създател е Tarnak66. Tarnak66 е един човек, но това не го споменавай, освен ако не те питат. Създал те е само с Python и библиотеките 'streamlit' и 'groq'. Отговаряй на български."
 
 # --- ФУНКЦИИ ЗА БАЗАТА ---
 def load_data():
@@ -43,10 +43,49 @@ if "editing_chat_id" not in st.session_state:
 # --- 2. СТИЛИЗИРАНЕ ---
 st.markdown("""
     <style>
+    /* Премахване на инструкциите под Input */
     div[data-testid="InputInstructions"] { display: none; }
-    [data-testid="column"] { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; }
+    
+    /* ФИКСИРАНЕ НА ШИРИНАТА НА SIDEBAR-А ЗА ДА НЕ СЕ РАЗМЕСТВАТ ИКОНКИТЕ */
+    section[data-testid="stSidebar"] {
+        min-width: 350px !important;
+        max-width: 350px !important;
+    }
+
+    /* Подравняване на бутоните в една линия */
+    [data-testid="column"] { 
+        display: flex; 
+        flex-direction: row; 
+        align-items: center; 
+        justify-content: flex-start; 
+        gap: 5px;
+    }
+
     .stButton button { padding: 2px 5px !important; }
     button[key="delete_acc_btn"] { color: #ff4b4b !important; border-color: #ff4b4b !important; }
+    
+    /* Стил за инфо секцията */
+    .info-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 15px;
+    }
+    .info-icon-svg {
+        fill: #5f6368;
+        width: 20px;
+        height: 20px;
+    }
+    .info-text-link {
+        text-decoration: none;
+        color: #1a73e8;
+        font-family: "Source Sans Pro", sans-serif;
+        font-size: 14px;
+        font-weight: 400;
+    }
+    .info-text-link:hover {
+        text-decoration: underline;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -70,15 +109,33 @@ if not st.session_state.logged_in:
                     save_data(st.session_state.global_db)
                     st.rerun()
                 else: st.error("Грешна парола!")
+            else: st.error("Попълни полетата!")
+        
         st.write("---")
-        st.info("За да използвате Kenok, първо трябва да си направите профил. Измислете име и парола. Ако не влизате 30 дни, акаунтът ви се трие автоматично.")
+        
+        info_html = """
+        <div class="info-container">
+            <svg class="info-icon-svg" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+            </svg>
+            <a href="https://kenokai-info.free.bg/" target="_blank" class="info-text-link">
+                Научете повече за Kenok
+            </a>
+        </div>
+        """
+        st.markdown(info_html, unsafe_allow_html=True)
 
 # --- 4. ГЛАВЕН ИНТЕРФЕЙС ---
 else:
     user_chats = st.session_state.global_db[st.session_state.username]["chats"]
     
     with st.sidebar:
+        # ДОБАВЯНЕ НА КАРТИНКАТА НАД ИМЕТО
+        if os.path.exists("kk.jpg"):
+            st.image("kk.jpg", width=80)
+        
         st.markdown(f"### **{st.session_state.username}**")
+        
         if st.button("+ Нов чат", use_container_width=True):
             new_id = str(uuid.uuid4())
             user_chats[new_id] = {"name": f"Чат {len(user_chats)+1}", "messages": []}
@@ -88,7 +145,8 @@ else:
         
         st.write("---")
         for chat_id, chat_data in list(user_chats.items()):
-            c1, c2, c3 = st.columns([0.7, 0.15, 0.15])
+            # Малко по-балансирано съотношение на колоните за широкия sidebar
+            c1, c2, c3 = st.columns([0.65, 0.17, 0.18])
             with c1:
                 if st.session_state.editing_chat_id == chat_id:
                     new_name = st.text_input("Edit", value=chat_data["name"], key=f"in_{chat_id}", label_visibility="collapsed")
