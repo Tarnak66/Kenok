@@ -1,5 +1,5 @@
 # Kenok - Useful AI 🤖
-Kenok е интелигентен асистент, изграден с Python, Streamlit и Groq (Llama 3.3). 
+Kenok е интелигентен асистент, изграден с Python, Streamlit и Groq. 
 Той може да търси информация в Google в реално време и да води разговори с памет.
 
 # [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://kenokai.streamlit.app/)
