@@ -4,7 +4,6 @@ import uuid
 import json
 import os
 from datetime import datetime, timedelta
-import extra_streamlit_components as stx
 
 # --- 1. КОНФИГУРАЦИЯ ---
 api_key = st.secrets.get("GROQ_KEY", "missing_key")
@@ -22,9 +21,6 @@ SYSTEM_INSTRUCTIONS = (
     "го напиши на правилен български или го остави на оригиналния му език в скоби, "
     "но запази цялата граматика и структура на изречението изцяло на български."
 )
-
-# Мениджър за бисквитки
-cookie_manager = stx.CookieManager()
 
 # --- ФУНКЦИИ ЗА БАЗАТА ---
 def load_data():
@@ -53,19 +49,6 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "editing_chat_id" not in st.session_state:
     st.session_state.editing_chat_id = None
-
-# --- АВТОМАТИЧЕН ВХОД ЧРЕЗ БИСКВИТКА ---
-auth_token = cookie_manager.get(cookie="kenok_token")
-
-if auth_token and not st.session_state.logged_in:
-    for u_name, u_info in st.session_state.global_db.items():
-        if u_info.get("token") == auth_token:
-            st.session_state.logged_in = True
-            st.session_state.username = u_name
-            st.session_state.global_db[u_name]["last_seen"] = datetime.now().isoformat()
-            save_data(st.session_state.global_db)
-            st.rerun()
-            break
 
 # --- 2. СТИЛИЗИРАНЕ ---
 st.markdown("""
@@ -119,7 +102,6 @@ if not st.session_state.logged_in:
     with col2:
         user = st.text_input("Потребител", placeholder="Потребител", label_visibility="collapsed")
         password = st.text_input("Парола", type="password", placeholder="Парола", label_visibility="collapsed")
-        remember_me = st.checkbox("Запомни ме")
         
         if st.button("Влез / Регистрация", use_container_width=True):
             if user and password:
@@ -130,12 +112,6 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.username = user
                     st.session_state.global_db[user]["last_seen"] = datetime.now().isoformat()
-                    
-                    if remember_me:
-                        token = str(uuid.uuid4())
-                        st.session_state.global_db[user]["token"] = token
-                        cookie_manager.set("kenok_token", token, expires_at=datetime.now() + timedelta(days=30))
-                    
                     save_data(st.session_state.global_db)
                     st.rerun()
                 else: st.error("Грешна парола!")
@@ -199,13 +175,7 @@ else:
 
         st.write("---")
         if st.button("🚪 Изход", use_container_width=True):
-            # Изтриване на токена от базата данни
-            if "token" in st.session_state.global_db[st.session_state.username]:
-                del st.session_state.global_db[st.session_state.username]["token"]
-                save_data(st.session_state.global_db)
-                
             st.session_state.logged_in = False
-            cookie_manager.delete("kenok_token")
             st.rerun()
         
         if st.button("❗ Изтрий акаунт", key="delete_acc_btn", use_container_width=True):
@@ -218,7 +188,6 @@ else:
                 del st.session_state.global_db[st.session_state.username]
                 save_data(st.session_state.global_db)
                 st.session_state.logged_in = False
-                cookie_manager.delete("kenok_token")
                 st.session_state.confirm_delete = False
                 st.rerun()
             if col_n.button("НЕ", use_container_width=True):
@@ -242,13 +211,12 @@ else:
             with st.chat_message("assistant"):
                 with st.spinner("Kenok мисли..."):
                     try:
-                        # Използваме стабилния модел llama3-70b-8192
                         res = client.chat.completions.create(
-                            model="llama3-70b-8192",
+                            model="llama-3.3-70b-versatile",
                             messages=[{"role": "system", "content": SYSTEM_INSTRUCTIONS}] + curr["messages"][-10:]
                         ).choices[0].message.content
                         st.write(res)
                         curr["messages"].append({"role": "assistant", "content": res})
                         save_data(st.session_state.global_db)
                     except Exception as e:
-                        st.error("Грешка при връзката с Kenok API. Моля опитайте отново.")
+                        st.error(f"Грешка при връзката с Groq API: {e}")
