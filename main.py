@@ -212,8 +212,8 @@ else:
                 with st.spinner("Kenok мисли..."):
                     try:
                         res = client.chat.completions.create(
-                            model="llama-3.1-8b-instant",
-                            messages=[{"role": "system", "content": SYSTEM_INSTRUCTIONS}] + curr["messages"][-10:]
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "system", "content": SYSTEM_INSTRUCTIONS}] + curr["messages"][-10:]
                         ).choices[0].message.content
                         st.write(res)
                         curr["messages"].append({"role": "assistant", "content": res})
