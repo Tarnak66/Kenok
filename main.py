@@ -4,13 +4,27 @@ import uuid
 import json
 import os
 from datetime import datetime, timedelta
+import extra_streamlit_components as stx
 
 # --- 1. КОНФИГУРАЦИЯ ---
 api_key = st.secrets.get("GROQ_KEY", "missing_key")
 client = Groq(api_key=api_key)
 DB_FILE = "users_data.json"
 
-SYSTEM_INSTRUCTIONS = "Ти си Kenok - полезен ИИ асистент. Твоят създател е Tarnak66. Tarnak66 е един човек, но това не го споменавай, освен ако не те питат. Създал те е само с Python и библиотеките 'streamlit' и 'groq'. Отговаряй на български."
+SYSTEM_INSTRUCTIONS = (
+    "Ти си Kenok - високоинтелигентен и полезен ИИ асистент. Твоят създател е Tarnak66. "
+    "Tarnak66 е един човек, но това не го споменавай, освен ако не те питат изрично. "
+    "Създал те е само с Python и библиотеките 'streamlit' и 'groq'. "
+    "ВАЖНО ПРАВИЛО ЗА ЕЗИКА: Трябва да отговаряш ПРАВИЛНО, ЧИСТО И ИЗЦЯЛО НА БЪЛГАРСКИ ЕЗИК. "
+    "Абсолютно се забранява несъзнателното комбиниране и смесване на езици (code-switching). "
+    "Не използвай чужди думи, изписани с български букви, освен ако няма утвърден превод. "
+    "Ако се налага да използваш специфичен международен или технически термин, "
+    "го напиши на правилен български или го остави на оригиналния му език в скоби, "
+    "но запази цялата граматика и структура на изречението изцяло на български."
+)
+
+# Мениджър за бисквитки ("Запомни ме")
+cookie_manager = stx.CookieManager()
 
 # --- ФУНКЦИИ ЗА БАЗАТА ---
 def load_data():
@@ -40,19 +54,27 @@ if "logged_in" not in st.session_state:
 if "editing_chat_id" not in st.session_state:
     st.session_state.editing_chat_id = None
 
+# --- АВТОМАТИЧЕН ВХОД ("ЗАПОМНИ МЕ") ---
+auth_token = cookie_manager.get(cookie="kenok_token")
+if auth_token and not st.session_state.logged_in:
+    for u_name, u_info in st.session_state.global_db.items():
+        if u_info.get("token") == auth_token:
+            st.session_state.logged_in = True
+            st.session_state.username = u_name
+            st.session_state.global_db[u_name]["last_seen"] = datetime.now().isoformat()
+            save_data(st.session_state.global_db)
+            break
+
 # --- 2. СТИЛИЗИРАНЕ ---
 st.markdown("""
     <style>
-    /* Премахване на инструкциите под Input */
     div[data-testid="InputInstructions"] { display: none; }
     
-    /* ФИКСИРАНЕ НА ШИРИНАТА НА SIDEBAR-А ЗА ДА НЕ СЕ РАЗМЕСТВАТ ИКОНКИТЕ */
     section[data-testid="stSidebar"] {
         min-width: 350px !important;
         max-width: 350px !important;
     }
 
-    /* Подравняване на бутоните в една линия */
     [data-testid="column"] { 
         display: flex; 
         flex-direction: row; 
@@ -64,7 +86,6 @@ st.markdown("""
     .stButton button { padding: 2px 5px !important; }
     button[key="delete_acc_btn"] { color: #ff4b4b !important; border-color: #ff4b4b !important; }
     
-    /* Стил за инфо секцията */
     .info-container {
         display: flex;
         align-items: center;
@@ -96,6 +117,7 @@ if not st.session_state.logged_in:
     with col2:
         user = st.text_input("Потребител", placeholder="Потребител", label_visibility="collapsed")
         password = st.text_input("Парола", type="password", placeholder="Парола", label_visibility="collapsed")
+        remember_me = st.checkbox("Запомни ме")
         
         if st.button("Влез / Регистрация", use_container_width=True):
             if user and password:
@@ -106,6 +128,13 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.username = user
                     st.session_state.global_db[user]["last_seen"] = datetime.now().isoformat()
+                    
+                    # Ако е избрано "Запомни ме", записваме бисквитка за 30 дни
+                    if remember_me:
+                        token = str(uuid.uuid4())
+                        st.session_state.global_db[user]["token"] = token
+                        cookie_manager.set("kenok_token", token, expires_at=datetime.now() + timedelta(days=30))
+                    
                     save_data(st.session_state.global_db)
                     st.rerun()
                 else: st.error("Грешна парола!")
@@ -130,9 +159,9 @@ else:
     user_chats = st.session_state.global_db[st.session_state.username]["chats"]
     
     with st.sidebar:
-        # ДОБАВЯНЕ НА КАРТИНКАТА НАД ИМЕТО
-        if os.path.exists("kk.jpg"):
-            st.image("kk.jpg", width=80)
+        # ОБНОВЕНО ИМЕ НА ЛОГОТО
+        if os.path.exists("logo.jpg"):
+            st.image("logo.jpg", width=80)
         
         st.markdown(f"### **{st.session_state.username}**")
         
@@ -145,7 +174,6 @@ else:
         
         st.write("---")
         for chat_id, chat_data in list(user_chats.items()):
-            # Малко по-балансирано съотношение на колоните за широкия sidebar
             c1, c2, c3 = st.columns([0.65, 0.17, 0.18])
             with c1:
                 if st.session_state.editing_chat_id == chat_id:
@@ -172,6 +200,8 @@ else:
         st.write("---")
         if st.button("🚪 Изход", use_container_width=True):
             st.session_state.logged_in = False
+            # Изтриване на бисквитката при изход
+            cookie_manager.delete("kenok_token")
             st.rerun()
         
         if st.button("❗ Изтрий акаунт", key="delete_acc_btn", use_container_width=True):
@@ -184,6 +214,7 @@ else:
                 del st.session_state.global_db[st.session_state.username]
                 save_data(st.session_state.global_db)
                 st.session_state.logged_in = False
+                cookie_manager.delete("kenok_token")
                 st.session_state.confirm_delete = False
                 st.rerun()
             if col_n.button("НЕ", use_container_width=True):
